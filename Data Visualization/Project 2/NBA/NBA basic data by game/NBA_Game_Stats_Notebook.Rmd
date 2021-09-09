@@ -1,0 +1,305 @@
+---
+title: "NBA Game Stats Since the 1996-97 Season"
+output:
+  pdf_document: default
+  word_document: default
+  html_notebook: default
+---
+
+Zohaib Zahid  
+Project #2 – Data Exploration and Design  
+Due: 2/22/2021  
+
+<h2>Data</h2>
+
+The dataset chosen for this assignment is from Kaggle: 
+https://www.kaggle.com/kenhuang41/nba-basic-game-data-by-player
+
+This dataset features individual player data from all games they played in from start of 1996-97 season to December 31, 2020. 
+
+Loading in the library
+```{r}
+library(dplyr)
+library(ggplot2)
+```
+
+Read the file
+```{r}
+games <- read.csv(file = 'games.csv')
+```
+
+Check the top of the data:
+```{r}
+head(games)
+```
+* GAMES_ID - Unique Game ID (Nominal)  
+* TEAM - Player's team (Nominal)  
+* OPPT - Opponent's team (Nominal)  
+* TEAM_SCORE - Player's Team Score (Interval)  
+* OPPY_SCORE - Oppoenet's Team Score (Interval)  
+* RESULT - Win/Loss (Ordinal)  
+* SCORE_DIFF - Team Score - Opponent Team (Interval)  
+* PLAYER - Player Name (Nominal)  
+* MP - Minutes played (Interval)  
+* FG - Field Goals Made (Interval)  
+* FGA - Field Goals Attempted (Interval)  
+* FG3 - 3 Pointers Made (Interval)  
+* FG3A - 3 Pointers Attempted (Interval)  
+* FT - Free Throws Made (Interval)  
+* FTA - Free Throws Attempted (Interval)  
+* ORB - Offensive Rebounds (Interval)  
+* DRB - Defensive Rebounds (Interval)  
+* TRB - Total Rebounds (Interval)  
+* AST - Assists (Interval)  
+* STL - Steals (Interval)  
+* BLK - Blocks (Interval)  
+* TOV - Turnovers (Interval)  
+* PF - Personal Fouls (Interval)  
+* PLUS_MINUS - Individual Plus Minus (Interval)  
+* PTS - Total Points (Interval)  
+* TOTAL_MINS - Total Minutes (Interval)  
+* STARTER - Started or Not (Ordina)  
+
+Run a quick analysis on the data provided:
+```{r}
+summary(games)
+```
+
+Notice that this dataset has 743423 entries. This represents every player, in every game played since 1996-97 season, upto December 31, 2020. When taking a closer look at the score difference, it is pretty symmetrical almost with the mean being zero, because the data also include data of those players on the losing team, therefore the score difference shown for that player is negative. 
+
+For some players this season is mid career, for others it's the start. However, for this analysis all that matters is the time period of this dataset.
+
+To make this data a bit more useful to us, lets add a column just for year the game was played, which can be processed as a subset of the game_ID. Although the year does not exactly correspond to the season since seasons go across 2 years usually, this will still help analyze how over the years players have changed. 
+```{r}
+games <- mutate(games, year = substr(GAME_ID, 12, 15))
+```
+
+Now, Lets take a look at the score distribution of the winning teams in this dataset: 
+```{r}
+by_game <- group_by(games,GAME_ID)
+by_winning_game_score <- group_by(by_game,TEAM_SCORE, .add=TRUE) %>%
+  filter(RESULT=="W")
+Winning_Games_dist <- summarise(by_winning_game_score)
+hist(Winning_Games_dist$TEAM_SCORE)
+abline(v = mean(Winning_Games_dist$TEAM_SCORE), col = "blue", lwd = 2)
+boxplot(Winning_Games_dist$TEAM_SCORE)
+summary(Winning_Games_dist$TEAM_SCORE)
+```
+Lets take a look at the score distribution of the losing teams in this dataset: 
+```{r}
+by_game <- group_by(games,GAME_ID)
+by_losing_game_score <- group_by(by_game,TEAM_SCORE, .add=TRUE) %>%
+  filter(RESULT=="L")
+Losing_Games_dist <- summarise(by_losing_game_score)
+hist(Losing_Games_dist$TEAM_SCORE)
+abline(v = mean(Losing_Games_dist$TEAM_SCORE), col = "blue", lwd = 2)
+boxplot(Losing_Games_dist$TEAM_SCORE)
+summary(Losing_Games_dist$TEAM_SCORE)
+```
+
+
+<h2>Analysis</h2>
+
+Now that there is a little better understanding of the data, lets take a look at five analytical questions at hand:
+
+1. Players with the most points scored since 1996-97 season? 
+2. Players with the most games over 40 points?
+3. Who has the best field goal ratios in their career?*   
+4. Player with the best overall stats in their career?*
+5. Which team did LeBron play the best on?*
+
+* the questions selected for the visualization
+
+
+
+\newpage
+<h3>Question 1 - Players with the most points scored since 1996-97 season?</h3>
+
+```{r}
+by_player <- group_by(games,PLAYER)
+
+most_points_scored <- summarise(by_player, points = sum(PTS)) %>%
+  arrange(desc(points)) %>%
+  top_n(5)
+
+most_points_scored
+```
+
+Here is a list of the top 5 players with the highest points scored since 1996-97 season.  
+
+
+\newpage
+<h3>Question 2 - Players with the most games over 40 points?</h3>
+```{r}
+most_games_over_40pts <- group_by(games,PLAYER) %>%
+  filter(PTS>40) %>%
+  count(PLAYER) %>%
+  arrange(desc(n)) %>%
+  ungroup(PLAYER) %>%
+  top_n(5)
+  
+most_games_over_40pts
+
+```
+
+Here is a list of the top 5 players with the most games with atleast 40 points since 1996-97 season. 
+
+Now that we have a few of what I would consider the top players in the NBA, according to total points scored and most games with atleast 40 pts. Lets analyze a few stats from these individuals to try and help narrow down and determine who is the best of these player in the NBA since 1996-97 season. 
+
+
+\newpage
+<h3>Question 3 - Who has the best field goal ratios in their career? </h3>
+
+```{r}
+fgr <- mutate(games, FGR = FG/FGA, FGR3PT = FG3/FG3A, FGRFT = FT/FTA) %>%
+  filter(PLAYER == most_games_over_40pts$PLAYER | PLAYER == most_points_scored$PLAYER)
+
+best_fgr <- group_by(fgr,PLAYER) %>%
+  summarise(avgfgr = mean(FGR, na.rm = TRUE)) %>%
+  arrange(desc(avgfgr))
+
+best_3ptr <- group_by(fgr,PLAYER) %>%
+  summarise(avg3ptr = mean(FGR3PT, na.rm = TRUE)) %>%
+  arrange(desc(avg3ptr))
+
+best_ftr <- group_by(fgr,PLAYER) %>%
+  summarise(avgftr = mean(FGRFT, na.rm = TRUE)) %>%
+  arrange(desc(avgftr))
+
+merged_fgr <- merge(best_fgr,best_3ptr,by.x="PLAYER") %>%
+  merge(best_ftr,by.x="PLAYER")
+merged_fgr
+
+```
+
+See Viz 3.1 below- This visualization is represented by a bar plot, in descending order. The reason for this type of chart for this data was to show the "rank" of these eight (8) players. Looking at both the table and chart will help understand the data better. The other part of this visualization that helps is that it is ranked in decsending order to give the viewer less items to look at all at once, as comparing bar heights can be deceiving sometimes.
+
+![Viz 3_1: Avg Field Goal Ratio top 8 players](Q3V1.jpg)
+
+See Viz 3.2 below - This visualization is represented by a lollipop chart. The reason for this type of chart for this data was to show the same data from a somewhat different view "rank" of these eight (8) players. However, the data being represented here different and it is using the average 3 point ratio (avg3ptr). Similarly, the chart is in descending order to give the viewer less items to look at all at once.
+
+![Viz 3_2: Avg 3pt Ratio top 8 players](Q3V2.jpg)
+See Viz 3.3 below - This visualization is represented by a circle plot with 3 axes, one for each column/feature. The reason for this type of chart for this data was to show a comparison between players. For the purpose and proof of concept, used it to represent only 2 players(Lebron James and Kobe Bryant). There would have been 28 combinations for any 2 players, and would best work with an interactive view of some sort to select player 1 and player 2 for comparison. The purpose of this visualization would be to easily be able to compare stats of 2 players versus having to look at multiple charts, and piecing together information.
+
+![Viz 3_3: Comparison between 2 players](Q3V3.jpg)
+Extra: In addition, to the career stats, sometimes its meaningful to look at a few per year stats as well. Below is the Field goal ratio per year for these players, along with their points per game per year stats. This will help with making sure the players that are scoring higher points are not doing so at the sacrifice of their field goal percentage, and not have it play into the idea of more shots taken the higher the score. 
+
+```{r}
+by_player <- filter(fgr) %>%
+  group_by(PLAYER, year)
+
+ppg_per_yr <- summarise(by_player, points = mean(PTS, na.rm = TRUE)) %>%
+  arrange(year)
+
+ppg_per_yr
+
+# plot
+ggplot(data = ppg_per_yr, aes(x=ppg_per_yr$year, y=ppg_per_yr$points, group = ppg_per_yr$PLAYER, color =ppg_per_yr$PLAYER)) + geom_line() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+```
+As seen in this visualization above, the top 3 players of the 8 that are being examined are James Harden, Lebron James, and Kevin Durant in terms of most points per game per year. 
+
+```{r}
+by_player <- filter(fgr) %>%
+  group_by(PLAYER, year)
+
+best_fgr_per_yr <- summarise(by_player, FGR_per_yr = mean(FGR, na.rm = TRUE)) %>%
+  arrange(year)
+
+best_fgr_per_yr
+
+# plot
+ggplot(data = best_fgr_per_yr, aes(x=best_fgr_per_yr$year, y=best_fgr_per_yr$FGR_per_yr, group = best_fgr_per_yr$PLAYER, color =best_fgr_per_yr$PLAYER)) + geom_line() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
+Now in the visualizaiton above, lets take a closer look at James Harden, Lebron James, and Kevin Durant in terms of their field goal percentage per year. Notice that James Harden has a lower ratio than both Lebron James and Kevin Durant, leading us to believe he has higher points per game only because of how many shots he took in total.
+
+\newpage
+<h3>Question 4 - Player with the best overall stats in their career? </h3>
+```{r}
+stats <- filter(fgr)
+
+best_stats <- group_by(stats,PLAYER) %>%
+  summarise(avgTRB = mean(TRB, na.rm = TRUE), avgAST = mean(AST, na.rm = TRUE), avgSTL = mean(STL, na.rm = TRUE), avgBLK = mean(BLK, na.rm = TRUE)) %>%
+  mutate(total = avgTRB+avgAST+avgSTL+avgBLK) %>%
+  arrange(desc(total))
+
+best_stats
+
+by_player <- filter(fgr) %>%
+  group_by(PLAYER, year)
+
+best_stats_per_year <- summarise(by_player, avgTRB = mean(TRB, na.rm = TRUE), avgAST = mean(AST, na.rm = TRUE), avgSTL = mean(STL, na.rm = TRUE), avgBLK = mean(BLK, na.rm = TRUE)) %>%
+  mutate(total = avgTRB+avgAST+avgSTL+avgBLK) %>%
+  arrange(desc(total))
+
+best_stats_per_year
+
+ggplot(data = best_stats_per_year, aes(x=best_stats_per_year$year, y=best_stats_per_year$total, group = best_stats_per_year$PLAYER, color =best_stats_per_year$PLAYER)) + geom_line() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+```
+See Viz 4.1 above- This visualization is represented by a multiple line plot. This visualization allows the user to view 3 variables at the same time. The visualization is able to show the total stats(y axis), the year(x axis), and the player (colored line).The y axis is calculated by adding together the average total rebounds per game, average assist per game, average steal per game, and average block per game - all for a given year. This is also just a simplification of the stats, as in the real game there are weights associated with these stats, where rebounds and assists are more heavily weighed than blocks and steals. 
+
+
+See Viz 4.2 below- This visualization is represented by a multiple marks. This visualization also allows the user to view 3 variables at the same time. However, in this visualization it shows the separate stats per person and not per year. The average stat score is on the y axis, the stat on the x axis, and each player is represented by a different mark.The y axis represent the average total rebounds per game, average assist per game, average steal per game, and average block per game - in a players whole career. 
+
+![Viz 4_2: Stats Dot Plot of the top 8 players](Q4V2.jpg)
+
+See Viz 4.3 below- This visualization is represented by stacked bar chart. This visualization also allows the user to view multiple variables at once as well. In this visualization, the stacked bar is able to show the breakdown of the total stat. The total stat score is on the y axis, the player is on the x axis, and each stat is represented by a different shading/texture.These are also representing whoel career stats versus the yearly stats seen in Viz 4_1. 
+
+![Viz 4_3: Stacked bar chart of the top 8 players](Q4V3.jpg)
+
+To continue the conversation of who is best, initially in Viz 4_1 it can be seen that Dirk Nowitzki and Tim Duncan were on top, until Lebron James started his career in 2003, and they started on what looks to be a steady decline until retirement. Lebron James since starting in 2003, had 12 out of 18 years of being on the top of this chart, and the other 6 years he was second on this chart. Lebron James has the highest overall stat total from the 8 players seen in Viz 4_3.
+
+Safe to say that statistically, Lebron James is the best overall player in the NBA according to this dataset that covers all games from 1996-97 season to December 31, 2020.
+
+\newpage
+<h3>Question 5 - Which team did LeBron play the best on? </h3>
+```{r}
+by_player <- filter(games, PLAYER=="LeBron James") %>%
+  group_by(TEAM,year)
+
+Lebron_most_points_per_year <- summarise(by_player, points = sum(PTS)) %>%
+  arrange(year)
+ 
+Lebron_most_points_per_year
+
+# plot
+ggplot(data = Lebron_most_points_per_year, aes(x=Lebron_most_points_per_year$TEAM, y=Lebron_most_points_per_year$points, group = Lebron_most_points_per_year$TEAM, color=Lebron_most_points_per_year$TEAM)) + geom_boxplot() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+```
+See Viz 5.1 above- This visualization is represented by a multiple box plots. This visualization allows the spread of scores. The visualization is able to show the total points per year(y axis), the team(x axis). This chart was chosen to not only show the Lebron's average points scored per year, but to show the range of scores he has scored for a particular team. Notice that the box plot for Lakers is small, that is ultimately due to the limited number of years he has been with that franchise. On average, Lebron had the most points scored per year on the Cleveland Cavaliers.
+
+```{r}
+
+Lebron_avg_points_per_year <-summarise(by_player, avgMinsPlayed = mean(MP, na.rm=TRUE), points = mean(PTS, na.rm=TRUE)) %>%
+  arrange(year)
+
+Lebron_avg_points_per_year
+
+# plot
+ggplot(data = Lebron_avg_points_per_year, aes(x=Lebron_avg_points_per_year$year, y=Lebron_avg_points_per_year$points, group = Lebron_avg_points_per_year$TEAM, color=Lebron_avg_points_per_year$TEAM)) + geom_point() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+```
+
+See Viz 5.2 above- This visualization is represented by a scatter plot. This visualization allows to spread of scores across multiple years. The visualization is able to show the average points per game per year(y axis), the year(x axis). This chart was chosen to to show how Lebron scored on average in any given year. Notice that only his first 2 years in the NBA did he have a 22.5 and lower average game score (which is still very impressive). Also that his top seasons were with the Cleveland Cavaliers. 
+
+
+```{r}
+Lebron_team_summary <- filter(games, PLAYER=="LeBron James") %>%
+  group_by(TEAM) %>%
+  count()
+
+Lebron_team_summary
+
+LeBron_Points_Summary <- ungroup(Lebron_most_points_per_year) %>%
+  group_by(TEAM) %>%
+  summarize(TotalPts = sum(points))
+
+LeBron_Points_Summary
+  
+```
+See Viz 5.3 below- This visualization is represented by pie chart. This visualization also allows the user to view relative share of games played and total points scored with a certain team. Notice here that the games played share and the points scored for Lebron are very highly correlated. which means he has been really consistent during his time with each team. 
+
+![Viz 5_3: LeBron James overall Game Summary](Q5V3.jpg)
+
+In conclusion to this question, the team that he performed his best so far is with the Cleveland Cavaliers. 
